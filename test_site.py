@@ -1,77 +1,78 @@
 # test_site.py
-# Playwright regression testing script for www.google.com
-# Captures screenshots and logs, runs in headless mode
+# Playwright regression test for www.google.com
+# Captures screenshots and logs, structured for CI/CD integration
 
 import os
-import logging
+from datetime import datetime
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
-def setup_logging(log_dir):
-    os.makedirs(log_dir, exist_ok=True)
-    log_path = os.path.join(log_dir, 'test_logs.txt')
-    logging.basicConfig(
-        filename=log_path,
-        filemode='w',
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        level=logging.INFO
-    )
-    return log_path
+# Create output directories if they don't exist
+def ensure_directories():
+    os.makedirs('screenshots', exist_ok=True)
+    os.makedirs('logs', exist_ok=True)
+
+def log(message):
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    with open('logs/test_log.txt', 'a') as f:
+        f.write(f"[{timestamp}] {message}\n")
+    print(f"[{timestamp}] {message}")
 
 def test_google():
-    screenshots_dir = 'screenshots'
-    os.makedirs(screenshots_dir, exist_ok=True)
-    log_dir = 'logs'
-    log_path = setup_logging(log_dir)
-
+    ensure_directories()
     try:
+        log('Starting Playwright regression test for www.google.com')
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             context = browser.new_context()
             page = context.new_page()
 
-            # 1. Navigate to Google
-            logging.info('Navigating to https://www.google.com')
+            # 1. Test: Page load
+            log('Navigating to Google homepage...')
             page.goto('https://www.google.com', timeout=15000)
-            page.screenshot(path=os.path.join(screenshots_dir, 'google_home.png'))
-            logging.info('Google home page loaded and screenshot taken.')
+            page.screenshot(path='screenshots/google_home.png')
+            log('Google homepage loaded and screenshot captured.')
 
-            # 2. Accept cookies if prompted
+            # Accept cookies if the consent form appears
             try:
-                if page.is_visible("button:has-text('I agree')"):
-                    page.click("button:has-text('I agree')")
-                    logging.info('Accepted cookies.')
+                consent_btn = page.locator("button:has-text('Accept all')")
+                if consent_btn.is_visible():
+                    consent_btn.click()
+                    log('Accepted cookies consent.')
+                    page.screenshot(path='screenshots/google_home_after_consent.png')
             except Exception:
-                pass  # Cookie prompt may not appear in all regions
+                log('No consent dialog detected.')
 
-            # 3. Perform a search
-            search_query = 'Playwright Python'
-            logging.info(f'Entering search query: {search_query}')
-            page.fill("input[name='q']", search_query)
+            # 2. Test: Search functionality
+            log('Testing search functionality...')
+            page.fill("input[name='q']", "Playwright Python")
+            page.screenshot(path='screenshots/search_filled.png')
             page.press("input[name='q']", "Enter")
-            page.wait_for_selector('h3', timeout=10000)
-            page.screenshot(path=os.path.join(screenshots_dir, 'search_results.png'))
-            logging.info('Search results page loaded and screenshot taken.')
-
-            # 4. Click the first search result link
-            first_result_selector = 'h3'
             try:
-                first_result = page.query_selector(first_result_selector)
-                if first_result:
-                    first_result.click()
-                    page.wait_for_load_state('load', timeout=10000)
-                    page.screenshot(path=os.path.join(screenshots_dir, 'first_result.png'))
-                    logging.info('Clicked first search result and took screenshot.')
-                else:
-                    logging.warning('First search result not found.')
+                page.wait_for_selector('h3', timeout=10000)
+                log('Search results loaded.')
+                page.screenshot(path='screenshots/search_results.png')
             except PlaywrightTimeoutError:
-                logging.error('Timeout while waiting for first search result to load.')
+                log('Timeout waiting for search results.')
+
+            # 3. Test: Navigation element (clicking the 'Images' link)
+            log("Testing navigation to 'Images'...")
+            try:
+                images_link = page.locator("a:has-text('Images')")
+                if images_link.is_visible():
+                    images_link.click()
+                    page.wait_for_load_state('networkidle')
+                    log("Navigated to 'Images' tab.")
+                    page.screenshot(path='screenshots/images_tab.png')
+                else:
+                    log("'Images' link not found.")
+            except Exception as e:
+                log(f"Error navigating to 'Images': {e}")
 
             browser.close()
-            logging.info('Test completed successfully.')
-
+            log('Test completed successfully.')
     except Exception as e:
-        logging.exception(f'Test failed: {e}')
-        print(f"Test failed. See logs at {log_path}")
+        log(f'Exception occurred: {e}')
+        raise
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     test_google()
