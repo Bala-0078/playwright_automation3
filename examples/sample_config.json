@@ -1,0 +1,16 @@
+{
+  "domain": "https://www.google.com",
+  "functionalities": [
+    {
+      "type": "search",
+      "selector": "input[name=\"q\"]",
+      "value": "Playwright Python",
+      "result_selector": "h3"
+    },
+    {
+      "type": "click",
+      "selector": "a[href*=\"tbm=isch\"]",
+      "result_selector": "img"
+    }
+  ]
+}
